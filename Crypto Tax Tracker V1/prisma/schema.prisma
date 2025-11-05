@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  portfolios    Portfolio[]
+  transactions  Transaction[]
+  taxReports    TaxReport[]
+}
+
+model Cryptocurrency {
+  id          String   @id @default(cuid())
+  symbol      String   @unique
+  name        String
+  coingeckoId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  transactions Transaction[]
+  prices       CryptoPrice[]
+}
+
+model CryptoPrice {
+  id               String   @id @default(cuid())
+  cryptocurrencyId String
+  price            Float
+  timestamp        DateTime @default(now())
+  
+  cryptocurrency Cryptocurrency @relation(fields: [cryptocurrencyId], references: [id], onDelete: Cascade)
+  
+  @@unique([cryptocurrencyId, timestamp])
+}
+
+model Portfolio {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id               String           @id @default(cuid())
+  type             TransactionType
+  amount           Float
+  priceUsd         Float
+  feeUsd           Float?
+  totalUsd         Float
+  timestamp        DateTime
+  description      String?
+  exchange         String?
+  txHash           String?
+  portfolioId      String?
+  cryptocurrencyId String
+  userId           String
+  
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolio      Portfolio?     @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
+  cryptocurrency Cryptocurrency @relation(fields: [cryptocurrencyId], references: [id], onDelete: Cascade)
+  
+  taxLots TaxLot[]
+  
+  @@index([userId, timestamp])
+  @@index([cryptocurrencyId, timestamp])
+}
+
+model TaxLot {
+  id             String   @id @default(cuid())
+  transactionId  String
+  amount         Float
+  costBasis      Float
+  acquiredAt     DateTime
+  disposedAt     DateTime?
+  disposalPrice  Float?
+  gainLoss       Float?
+  isClosed       Boolean  @default(false)
+  
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  
+  @@index([transactionId, isClosed])
+}
+
+model TaxReport {
+  id          String      @id @default(cuid())
+  name        String
+  taxYear     Int
+  userId      String
+  status      ReportStatus @default(DRAFT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calculations TaxCalculation[]
+  
+  @@unique([userId, taxYear, name])
+}
+
+model TaxCalculation {
+  id          String           @id @default(cuid())
+  taxReportId String
+  shortTermGains Float
+  longTermGains  Float
+  shortTermLosses Float
+  longTermLosses  Float
+  totalGains     Float
+  totalLosses    Float
+  netGainLoss    Float
+  costBasis      Float
+  proceeds       Float
+  
+  taxReport TaxReport @relation(fields: [taxReportId], references: [id], onDelete: Cascade)
+}
+
+enum TransactionType {
+  BUY
+  SELL
+  TRANSFER_IN
+  TRANSFER_OUT
+  MINING_REWARD
+  STAKING_REWARD
+  AIRDROP
+  FEE
+  OTHER
+}
+
+enum ReportStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  ERROR
+}
